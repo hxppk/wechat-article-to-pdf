@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios');
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
@@ -35,61 +34,102 @@ app.post('/api/convert', async (req, res) => {
     return res.status(400).json({ error: '请提供微信公众号文章 URL' });
   }
 
+  let browser = null;
+
   try {
     console.log('开始处理文章:', url);
 
-    // Step 1: 调用第三方 API 获取 HTML
-    console.log('正在从第三方 API 获取文章 HTML...');
-    // 正确的 API: https://down.mptext.top/api/public/v1/download
-    // 参数: url (需要 URL 编码), format (可选，默认 html)
-    // 此接口不需要 API 密钥
-    const encodedUrl = encodeURIComponent(url);
-    const apiUrl = `https://down.mptext.top/api/public/v1/download?url=${encodedUrl}&format=html`;
-
-    const response = await axios.get(apiUrl, {
-      timeout: 30000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        'Referer': 'https://down.mptext.top/',
-        'Origin': 'https://down.mptext.top'
-      }
-    });
-
-    if (!response.data) {
-      throw new Error('无法获取文章内容');
-    }
-
-    // API 直接返回 HTML 内容
-    const htmlContent = response.data;
-
-    console.log('成功获取 HTML 内容，长度:', htmlContent.length);
-
-    // Step 2: 使用 Puppeteer 将 HTML 转换为 PDF
-    console.log('正在生成 PDF...');
-    const browser = await puppeteer.launch({
+    // 使用 Puppeteer 直接访问微信文章并生成 PDF
+    console.log('正在启动浏览器...');
+    browser = await puppeteer.launch({
       headless: 'new',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-gpu'
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process'
       ]
     });
 
     const page = await browser.newPage();
 
-    // 设置 HTML 内容
-    await page.setContent(htmlContent, {
-      waitUntil: 'networkidle0',
-      timeout: 30000
+    // 设置视口大小
+    await page.setViewport({ width: 1200, height: 800 });
+
+    // 设置 User-Agent
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+    console.log('正在访问微信文章...');
+
+    // 直接访问微信文章 URL
+    await page.goto(url, {
+      waitUntil: 'networkidle2',
+      timeout: 60000
     });
+
+    // 等待文章内容加载
+    await page.waitForSelector('#js_content', { timeout: 30000 }).catch(() => {
+      console.log('未找到 #js_content，尝试继续...');
+    });
+
+    // 等待图片加载完成
+    await page.evaluate(async () => {
+      const images = document.querySelectorAll('img');
+      await Promise.all(
+        Array.from(images).map(img => {
+          if (img.complete) return Promise.resolve();
+          return new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+            // 设置超时
+            setTimeout(resolve, 5000);
+          });
+        })
+      );
+    });
+
+    // 注入 CSS 优化打印效果
+    await page.addStyleTag({
+      content: `
+        /* 隐藏不需要的元素 */
+        #js_pc_qr_code, #js_share_source, .qr_code_pc_outer,
+        .rich_media_tool, .wx_follow_nickname, #js_tags_preview_toast,
+        .reward_area, .reward_qrcode_area, .rich_media_area_extra,
+        .function_mod, #js_toobar3, #js_pc_qr_code_img,
+        .wx_qrcode_iframe_wrap, .wx_profile_card_inner, #js_article_comment {
+          display: none !important;
+        }
+
+        /* 优化正文样式 */
+        .rich_media_content {
+          max-width: 100% !important;
+          padding: 0 !important;
+        }
+
+        /* 确保图片显示 */
+        img {
+          max-width: 100% !important;
+          height: auto !important;
+        }
+
+        /* 优化打印边距 */
+        body {
+          padding: 20px !important;
+        }
+      `
+    });
+
+    // 额外等待确保样式应用
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // 生成唯一的文件名
     const timestamp = Date.now();
     const filename = `wechat_article_${timestamp}.pdf`;
     const filepath = path.join(downloadsDir, filename);
+
+    console.log('正在生成 PDF...');
 
     // 生成 PDF
     await page.pdf({
@@ -105,10 +145,11 @@ app.post('/api/convert', async (req, res) => {
     });
 
     await browser.close();
+    browser = null;
 
     console.log('PDF 生成成功:', filename);
 
-    // Step 3: 返回下载链接
+    // 返回下载链接
     res.json({
       success: true,
       message: 'PDF 生成成功',
@@ -122,6 +163,10 @@ app.post('/api/convert', async (req, res) => {
       error: '转换失败',
       message: error.message
     });
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
   }
 });
 
