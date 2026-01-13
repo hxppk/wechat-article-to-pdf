@@ -62,11 +62,25 @@ app.post('/api/convert', async (req, res) => {
     console.log('成功获取 HTML 内容，长度:', htmlContent.length);
 
     // 注入中文网络字体，解决服务器无中文字体的问题
+    // 使用 cdnjs 上的思源黑体，访问更稳定
     const fontStyle = `
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+        @font-face {
+          font-family: 'Noto Sans SC';
+          font-style: normal;
+          font-weight: 400;
+          font-display: swap;
+          src: url('https://cdn.jsdelivr.net/npm/@aspect-build/aspect-dev-fonts@5.0.2/fonts/NotoSansSC-Regular.otf') format('opentype');
+        }
+        @font-face {
+          font-family: 'Noto Sans SC';
+          font-style: normal;
+          font-weight: 700;
+          font-display: swap;
+          src: url('https://cdn.jsdelivr.net/npm/@aspect-build/aspect-dev-fonts@5.0.2/fonts/NotoSansSC-Bold.otf') format('opentype');
+        }
         * {
-          font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+          font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Heiti SC', sans-serif !important;
         }
       </style>
     `;
@@ -120,8 +134,13 @@ app.post('/api/convert', async (req, res) => {
       );
     });
 
+    // 等待字体加载完成
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+
     // 额外等待确保渲染完成
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
     // 生成唯一的文件名
     const timestamp = Date.now();
