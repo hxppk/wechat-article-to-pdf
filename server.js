@@ -58,8 +58,27 @@ app.post('/api/convert', async (req, res) => {
       throw new Error('无法获取文章内容');
     }
 
-    const htmlContent = response.data;
+    let htmlContent = response.data;
     console.log('成功获取 HTML 内容，长度:', htmlContent.length);
+
+    // 注入中文网络字体，解决服务器无中文字体的问题
+    const fontStyle = `
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+        * {
+          font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+        }
+      </style>
+    `;
+
+    // 在 <head> 中注入字体样式
+    if (htmlContent.includes('<head>')) {
+      htmlContent = htmlContent.replace('<head>', '<head>' + fontStyle);
+    } else if (htmlContent.includes('<html>')) {
+      htmlContent = htmlContent.replace('<html>', '<html><head>' + fontStyle + '</head>');
+    } else {
+      htmlContent = fontStyle + htmlContent;
+    }
 
     // Step 2: 使用 Puppeteer 将 HTML 转换为 PDF
     console.log('正在启动浏览器...');
