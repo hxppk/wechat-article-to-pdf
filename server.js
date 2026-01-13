@@ -142,9 +142,71 @@ app.post('/api/convert', async (req, res) => {
     // 额外等待确保渲染完成
     await new Promise(resolve => setTimeout(resolve, 3000));
 
-    // 生成唯一的文件名
+    // 提取文章标题和公众号名称
+    const articleInfo = await page.evaluate(() => {
+      // 尝试多种方式获取标题
+      let title = '';
+      // 方式1: 从 title 标签获取
+      const titleEl = document.querySelector('title');
+      if (titleEl) {
+        title = titleEl.textContent.trim();
+      }
+      // 方式2: 从 h1 获取
+      if (!title) {
+        const h1 = document.querySelector('h1');
+        if (h1) title = h1.textContent.trim();
+      }
+      // 方式3: 从 meta og:title 获取
+      if (!title) {
+        const metaTitle = document.querySelector('meta[property="og:title"]');
+        if (metaTitle) title = metaTitle.getAttribute('content') || '';
+      }
+
+      // 尝试多种方式获取公众号名称
+      let author = '';
+      // 方式1: 从特定class获取 (mptext API返回的HTML结构)
+      const authorEl = document.querySelector('.account_nickname_inner, .wx_account_name, .rich_media_meta_nickname, .author_name, #js_name');
+      if (authorEl) {
+        author = authorEl.textContent.trim();
+      }
+      // 方式2: 从 meta 获取
+      if (!author) {
+        const metaAuthor = document.querySelector('meta[name="author"], meta[property="og:article:author"]');
+        if (metaAuthor) author = metaAuthor.getAttribute('content') || '';
+      }
+      // 方式3: 从页面文本中查找 "来自" 或 "作者" 后面的内容
+      if (!author) {
+        const allText = document.body.innerText;
+        const match = allText.match(/来自[：:]\s*([^\n]+)/);
+        if (match) author = match[1].trim();
+      }
+
+      return { title, author };
+    });
+
+    console.log('文章信息:', articleInfo);
+
+    // 清理文件名中的非法字符
+    const sanitizeFilename = (str) => {
+      if (!str) return '';
+      return str
+        .replace(/[<>:"/\\|?*]/g, '') // 移除非法字符
+        .replace(/\s+/g, '_')          // 空格替换为下划线
+        .substring(0, 50);             // 限制长度
+    };
+
+    // 生成文件名
     const timestamp = Date.now();
-    const filename = `wechat_article_${timestamp}.pdf`;
+    const titlePart = sanitizeFilename(articleInfo.title) || 'wechat_article';
+    const authorPart = sanitizeFilename(articleInfo.author);
+
+    let filename;
+    if (authorPart) {
+      filename = `${titlePart}_${authorPart}.pdf`;
+    } else {
+      filename = `${titlePart}_${timestamp}.pdf`;
+    }
+
     const filepath = path.join(downloadsDir, filename);
 
     console.log('正在生成 PDF...');
