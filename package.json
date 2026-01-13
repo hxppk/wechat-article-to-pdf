@@ -1,0 +1,19 @@
+{
+  "name": "wechat-article-to-pdf",
+  "version": "1.0.0",
+  "description": "Convert WeChat articles to PDF",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["wechat", "pdf", "converter"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "puppeteer": "^24.15.0",
+    "axios": "^1.6.2",
+    "cors": "^2.8.5"
+  }
+}

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微信公众号文章转 PDF</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>微信公众号文章转 PDF</h1>
+            <p class="subtitle">输入微信公众号文章链接，一键转换为 PDF 文件</p>
+        </header>
+
+        <main>
+            <div class="input-section">
+                <label for="articleUrl">文章链接</label>
+                <input
+                    type="text"
+                    id="articleUrl"
+                    placeholder="粘贴微信公众号文章链接..."
+                    autocomplete="off"
+                >
+                <button id="convertBtn" onclick="convertToPDF()">
+                    <span id="btnText">转换为 PDF</span>
+                    <span id="btnLoader" class="loader" style="display: none;"></span>
+                </button>
+            </div>
+
+            <div id="statusMessage" class="status-message"></div>
+
+            <div id="resultSection" class="result-section" style="display: none;">
+                <div class="result-card">
+                    <svg class="success-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    <h3>转换成功</h3>
+                    <p id="resultMessage">PDF 文件已生成</p>
+                    <button id="downloadBtn" class="download-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        下载 PDF
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>使用 <a href="https://down.mptext.top/dashboard/api" target="_blank">mptext API</a> 获取文章内容</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
