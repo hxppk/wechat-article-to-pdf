@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
@@ -39,7 +40,28 @@ app.post('/api/convert', async (req, res) => {
   try {
     console.log('开始处理文章:', url);
 
-    // 使用 Puppeteer 直接访问微信文章并生成 PDF
+    // Step 1: 调用第三方 API 获取 HTML
+    console.log('正在从第三方 API 获取文章 HTML...');
+    const encodedUrl = encodeURIComponent(url);
+    const apiUrl = `https://down.mptext.top/api/public/v1/download?url=${encodedUrl}&format=html`;
+
+    const response = await axios.get(apiUrl, {
+      timeout: 60000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
+      }
+    });
+
+    if (!response.data) {
+      throw new Error('无法获取文章内容');
+    }
+
+    const htmlContent = response.data;
+    console.log('成功获取 HTML 内容，长度:', htmlContent.length);
+
+    // Step 2: 使用 Puppeteer 将 HTML 转换为 PDF
     console.log('正在启动浏览器...');
     browser = await puppeteer.launch({
       headless: 'new',
@@ -47,9 +69,7 @@ app.post('/api/convert', async (req, res) => {
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process'
+        '--disable-gpu'
       ]
     });
 
@@ -58,20 +78,12 @@ app.post('/api/convert', async (req, res) => {
     // 设置视口大小
     await page.setViewport({ width: 1200, height: 800 });
 
-    // 设置 User-Agent
-    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    console.log('正在渲染 HTML...');
 
-    console.log('正在访问微信文章...');
-
-    // 直接访问微信文章 URL
-    await page.goto(url, {
-      waitUntil: 'networkidle2',
+    // 设置 HTML 内容
+    await page.setContent(htmlContent, {
+      waitUntil: 'networkidle0',
       timeout: 60000
-    });
-
-    // 等待文章内容加载
-    await page.waitForSelector('#js_content', { timeout: 30000 }).catch(() => {
-      console.log('未找到 #js_content，尝试继续...');
     });
 
     // 等待图片加载完成
@@ -83,46 +95,14 @@ app.post('/api/convert', async (req, res) => {
           return new Promise((resolve) => {
             img.onload = resolve;
             img.onerror = resolve;
-            // 设置超时
             setTimeout(resolve, 5000);
           });
         })
       );
     });
 
-    // 注入 CSS 优化打印效果
-    await page.addStyleTag({
-      content: `
-        /* 隐藏不需要的元素 */
-        #js_pc_qr_code, #js_share_source, .qr_code_pc_outer,
-        .rich_media_tool, .wx_follow_nickname, #js_tags_preview_toast,
-        .reward_area, .reward_qrcode_area, .rich_media_area_extra,
-        .function_mod, #js_toobar3, #js_pc_qr_code_img,
-        .wx_qrcode_iframe_wrap, .wx_profile_card_inner, #js_article_comment {
-          display: none !important;
-        }
-
-        /* 优化正文样式 */
-        .rich_media_content {
-          max-width: 100% !important;
-          padding: 0 !important;
-        }
-
-        /* 确保图片显示 */
-        img {
-          max-width: 100% !important;
-          height: auto !important;
-        }
-
-        /* 优化打印边距 */
-        body {
-          padding: 20px !important;
-        }
-      `
-    });
-
-    // 额外等待确保样式应用
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // 额外等待确保渲染完成
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     // 生成唯一的文件名
     const timestamp = Date.now();
@@ -184,13 +164,10 @@ app.get('/download/:filename', (req, res) => {
       console.error('下载失败:', err);
       res.status(500).json({ error: '下载失败' });
     }
-
-    // 下载完成后删除文件（可选）
-    // fs.unlinkSync(filepath);
   });
 });
 
-// 清理旧文件的定时任务（可选）
+// 清理旧文件的定时任务
 setInterval(() => {
   const files = fs.readdirSync(downloadsDir);
   const now = Date.now();
@@ -200,13 +177,12 @@ setInterval(() => {
     const stats = fs.statSync(filepath);
     const fileAge = now - stats.mtimeMs;
 
-    // 删除超过1小时的文件
     if (fileAge > 60 * 60 * 1000) {
       fs.unlinkSync(filepath);
       console.log('已删除旧文件:', file);
     }
   });
-}, 30 * 60 * 1000); // 每30分钟检查一次
+}, 30 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`服务器运行在 http://localhost:${PORT}`);
