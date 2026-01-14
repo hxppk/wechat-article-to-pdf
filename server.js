@@ -8,6 +8,17 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// 读取本地字体文件并转为 Base64
+const fontPath = path.join(__dirname, 'public', 'fonts', 'NotoSansSC-Regular.ttf');
+let fontBase64 = '';
+try {
+  const fontBuffer = fs.readFileSync(fontPath);
+  fontBase64 = fontBuffer.toString('base64');
+  console.log('字体文件加载成功，大小:', Math.round(fontBuffer.length / 1024), 'KB');
+} catch (err) {
+  console.error('字体文件加载失败:', err.message);
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -61,22 +72,24 @@ app.post('/api/convert', async (req, res) => {
     let htmlContent = response.data;
     console.log('成功获取 HTML 内容，长度:', htmlContent.length);
 
-    // 注入中文网络字体，解决服务器无中文字体的问题
-    // 使用多个CDN源确保稳定性
-    const fontStyle = `
-      <link rel="preconnect" href="https://fonts.googleapis.com">
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    // 注入本地中文字体（Base64编码），确保字体一定能加载
+    const fontStyle = fontBase64 ? `
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+        @font-face {
+          font-family: 'Noto Sans SC';
+          font-style: normal;
+          font-weight: 400;
+          font-display: swap;
+          src: url(data:font/truetype;base64,${fontBase64}) format('truetype');
+        }
         * {
-          font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+          font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
         }
         body, p, span, div, h1, h2, h3, h4, h5, h6, a, li, td, th {
-          font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+          font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
         }
       </style>
-    `;
+    ` : '';
 
     // 在 <head> 中注入字体样式
     if (htmlContent.includes('<head>')) {
