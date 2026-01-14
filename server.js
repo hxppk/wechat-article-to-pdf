@@ -58,41 +58,8 @@ app.post('/api/convert', async (req, res) => {
       throw new Error('无法获取文章内容');
     }
 
-    let htmlContent = response.data;
+    const htmlContent = response.data;
     console.log('成功获取 HTML 内容，长度:', htmlContent.length);
-
-    // 注入中文网络字体，解决服务器无中文字体的问题
-    // 使用 cdnjs 上的思源黑体，访问更稳定
-    const fontStyle = `
-      <style>
-        @font-face {
-          font-family: 'Noto Sans SC';
-          font-style: normal;
-          font-weight: 400;
-          font-display: swap;
-          src: url('https://cdn.jsdelivr.net/npm/@aspect-build/aspect-dev-fonts@5.0.2/fonts/NotoSansSC-Regular.otf') format('opentype');
-        }
-        @font-face {
-          font-family: 'Noto Sans SC';
-          font-style: normal;
-          font-weight: 700;
-          font-display: swap;
-          src: url('https://cdn.jsdelivr.net/npm/@aspect-build/aspect-dev-fonts@5.0.2/fonts/NotoSansSC-Bold.otf') format('opentype');
-        }
-        * {
-          font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Heiti SC', sans-serif !important;
-        }
-      </style>
-    `;
-
-    // 在 <head> 中注入字体样式
-    if (htmlContent.includes('<head>')) {
-      htmlContent = htmlContent.replace('<head>', '<head>' + fontStyle);
-    } else if (htmlContent.includes('<html>')) {
-      htmlContent = htmlContent.replace('<html>', '<html><head>' + fontStyle + '</head>');
-    } else {
-      htmlContent = fontStyle + htmlContent;
-    }
 
     // Step 2: 使用 Puppeteer 将 HTML 转换为 PDF
     console.log('正在启动浏览器...');
@@ -119,6 +86,26 @@ app.post('/api/convert', async (req, res) => {
       timeout: 60000
     });
 
+    // 使用 page.addStyleTag() 注入中文字体样式
+    // 字体文件使用本地服务器 URL，避免依赖外部 CDN
+    const fontUrl = `http://localhost:${PORT}/fonts/NotoSansCJKsc-Regular.otf`;
+    console.log('正在注入字体样式，字体 URL:', fontUrl);
+
+    await page.addStyleTag({
+      content: `
+        @font-face {
+          font-family: 'Noto Sans CJK SC';
+          font-style: normal;
+          font-weight: 400;
+          font-display: block;
+          src: url('${fontUrl}') format('opentype');
+        }
+        * {
+          font-family: 'Noto Sans CJK SC', 'PingFang SC', 'Microsoft YaHei', 'Heiti SC', sans-serif !important;
+        }
+      `
+    });
+
     // 等待图片加载完成
     await page.evaluate(async () => {
       const images = document.querySelectorAll('img');
@@ -135,12 +122,18 @@ app.post('/api/convert', async (req, res) => {
     });
 
     // 等待字体加载完成
+    console.log('正在等待字体加载...');
     await page.evaluate(async () => {
       await document.fonts.ready;
+      // 检查字体是否加载成功
+      const fonts = document.fonts;
+      for (const font of fonts) {
+        console.log('已加载字体:', font.family, font.status);
+      }
     });
 
-    // 额外等待确保渲染完成
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // 额外等待确保字体渲染完成（字体文件 16MB，需要更多时间）
+    await new Promise(resolve => setTimeout(resolve, 5000));
 
     // 生成唯一的文件名
     const timestamp = Date.now();
