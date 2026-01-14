@@ -2,9 +2,8 @@ services:
   - type: web
     name: wechat-article-to-pdf
     env: node
-    buildCommand: npm install
+    buildCommand: npm install && npx puppeteer browsers install chrome
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
-    # Render 会自动检测端口
