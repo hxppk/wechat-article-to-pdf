@@ -8,9 +8,6 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 获取 Puppeteer 可执行路径（支持 Docker 环境）
-const PUPPETEER_EXECUTABLE_PATH = process.env.PUPPETEER_EXECUTABLE_PATH || null;
-
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -64,14 +61,25 @@ app.post('/api/convert', async (req, res) => {
     let htmlContent = response.data;
     console.log('成功获取 HTML 内容，长度:', htmlContent.length);
 
-    // 注入中文字体样式，使用系统已安装的中文字体
+    // 注入中文网络字体，使用 jsDelivr CDN 的思源黑体
     const fontStyle = `
       <style>
-        * {
-          font-family: 'Noto Sans CJK SC', 'Noto Sans SC', 'WenQuanYi Zen Hei', 'WenQuanYi Micro Hei', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+        @font-face {
+          font-family: 'Noto Sans SC';
+          font-style: normal;
+          font-weight: 400;
+          font-display: swap;
+          src: url('https://cdn.jsdelivr.net/npm/@aspect-build/aspect-dev-fonts@5.0.2/fonts/NotoSansSC-Regular.otf') format('opentype');
         }
-        body, p, span, div, h1, h2, h3, h4, h5, h6, a, li, td, th {
-          font-family: 'Noto Sans CJK SC', 'Noto Sans SC', 'WenQuanYi Zen Hei', 'WenQuanYi Micro Hei', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+        @font-face {
+          font-family: 'Noto Sans SC';
+          font-style: normal;
+          font-weight: 700;
+          font-display: swap;
+          src: url('https://cdn.jsdelivr.net/npm/@aspect-build/aspect-dev-fonts@5.0.2/fonts/NotoSansSC-Bold.otf') format('opentype');
+        }
+        * {
+          font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Heiti SC', sans-serif !important;
         }
       </style>
     `;
@@ -87,21 +95,15 @@ app.post('/api/convert', async (req, res) => {
 
     // Step 2: 使用 Puppeteer 将 HTML 转换为 PDF
     console.log('正在启动浏览器...');
-    const launchOptions = {
+    browser = await puppeteer.launch({
       headless: 'new',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--font-render-hinting=none'
+        '--disable-gpu'
       ]
-    };
-    // 如果设置了自定义路径（Docker 环境），使用系统 Chromium
-    if (PUPPETEER_EXECUTABLE_PATH) {
-      launchOptions.executablePath = PUPPETEER_EXECUTABLE_PATH;
-    }
-    browser = await puppeteer.launch(launchOptions);
+    });
 
     const page = await browser.newPage();
 
