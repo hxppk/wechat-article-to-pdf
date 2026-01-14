@@ -87,21 +87,27 @@ app.post('/api/convert', async (req, res) => {
     });
 
     // 使用 page.addStyleTag() 注入中文字体样式
-    // 字体文件使用本地服务器 URL，避免依赖外部 CDN
-    const fontUrl = `http://localhost:${PORT}/fonts/NotoSansCJKsc-Regular.otf`;
-    console.log('正在注入字体样式，字体 URL:', fontUrl);
+    // 使用 jsDelivr CDN 加载思源黑体
+    console.log('正在注入字体样式...');
 
     await page.addStyleTag({
       content: `
         @font-face {
-          font-family: 'Noto Sans CJK SC';
+          font-family: 'Noto Sans SC';
           font-style: normal;
           font-weight: 400;
           font-display: block;
-          src: url('${fontUrl}') format('opentype');
+          src: url('https://cdn.jsdelivr.net/npm/@aspect-build/aspect-dev-fonts@5.0.2/fonts/NotoSansSC-Regular.otf') format('opentype');
+        }
+        @font-face {
+          font-family: 'Noto Sans SC';
+          font-style: normal;
+          font-weight: 700;
+          font-display: block;
+          src: url('https://cdn.jsdelivr.net/npm/@aspect-build/aspect-dev-fonts@5.0.2/fonts/NotoSansSC-Bold.otf') format('opentype');
         }
         * {
-          font-family: 'Noto Sans CJK SC', 'PingFang SC', 'Microsoft YaHei', 'Heiti SC', sans-serif !important;
+          font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Heiti SC', sans-serif !important;
         }
       `
     });
