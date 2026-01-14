@@ -8,16 +8,8 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 读取本地字体文件并转为 Base64
-const fontPath = path.join(__dirname, 'public', 'fonts', 'NotoSansSC-Regular.ttf');
-let fontBase64 = '';
-try {
-  const fontBuffer = fs.readFileSync(fontPath);
-  fontBase64 = fontBuffer.toString('base64');
-  console.log('字体文件加载成功，大小:', Math.round(fontBuffer.length / 1024), 'KB');
-} catch (err) {
-  console.error('字体文件加载失败:', err.message);
-}
+// 获取 Puppeteer 可执行路径（支持 Docker 环境）
+const PUPPETEER_EXECUTABLE_PATH = process.env.PUPPETEER_EXECUTABLE_PATH || null;
 
 // Middleware
 app.use(cors());
@@ -72,24 +64,17 @@ app.post('/api/convert', async (req, res) => {
     let htmlContent = response.data;
     console.log('成功获取 HTML 内容，长度:', htmlContent.length);
 
-    // 注入本地中文字体（Base64编码），确保字体一定能加载
-    const fontStyle = fontBase64 ? `
+    // 注入中文字体样式，使用系统已安装的中文字体
+    const fontStyle = `
       <style>
-        @font-face {
-          font-family: 'Noto Sans SC';
-          font-style: normal;
-          font-weight: 400;
-          font-display: swap;
-          src: url(data:font/truetype;base64,${fontBase64}) format('truetype');
-        }
         * {
-          font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+          font-family: 'Noto Sans CJK SC', 'Noto Sans SC', 'WenQuanYi Zen Hei', 'WenQuanYi Micro Hei', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
         }
         body, p, span, div, h1, h2, h3, h4, h5, h6, a, li, td, th {
-          font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+          font-family: 'Noto Sans CJK SC', 'Noto Sans SC', 'WenQuanYi Zen Hei', 'WenQuanYi Micro Hei', 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
         }
       </style>
-    ` : '';
+    `;
 
     // 在 <head> 中注入字体样式
     if (htmlContent.includes('<head>')) {
@@ -102,15 +87,21 @@ app.post('/api/convert', async (req, res) => {
 
     // Step 2: 使用 Puppeteer 将 HTML 转换为 PDF
     console.log('正在启动浏览器...');
-    browser = await puppeteer.launch({
+    const launchOptions = {
       headless: 'new',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-gpu'
+        '--disable-gpu',
+        '--font-render-hinting=none'
       ]
-    });
+    };
+    // 如果设置了自定义路径（Docker 环境），使用系统 Chromium
+    if (PUPPETEER_EXECUTABLE_PATH) {
+      launchOptions.executablePath = PUPPETEER_EXECUTABLE_PATH;
+    }
+    browser = await puppeteer.launch(launchOptions);
 
     const page = await browser.newPage();
 
