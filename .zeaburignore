@@ -1,0 +1,5 @@
+.cache/
+downloads/
+node_modules/
+*.pdf
+.DS_Store
