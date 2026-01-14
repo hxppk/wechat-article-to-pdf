@@ -118,30 +118,7 @@ app.post('/api/convert', async (req, res) => {
       timeout: 60000
     });
 
-    // 等待图片加载完成
-    await page.evaluate(async () => {
-      const images = document.querySelectorAll('img');
-      await Promise.all(
-        Array.from(images).map(img => {
-          if (img.complete) return Promise.resolve();
-          return new Promise((resolve) => {
-            img.onload = resolve;
-            img.onerror = resolve;
-            setTimeout(resolve, 5000);
-          });
-        })
-      );
-    });
-
-    // 等待字体加载完成
-    await page.evaluate(async () => {
-      await document.fonts.ready;
-    });
-
-    // 额外等待确保渲染完成
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // 提取文章标题和公众号名称
+    // 提取文章标题和公众号名称（在等待字体之前提取，避免干扰字体加载）
     const articleInfo = await page.evaluate(() => {
       // 尝试多种方式获取标题
       let title = '';
@@ -184,6 +161,29 @@ app.post('/api/convert', async (req, res) => {
     });
 
     console.log('文章信息:', articleInfo);
+
+    // 等待图片加载完成
+    await page.evaluate(async () => {
+      const images = document.querySelectorAll('img');
+      await Promise.all(
+        Array.from(images).map(img => {
+          if (img.complete) return Promise.resolve();
+          return new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+            setTimeout(resolve, 5000);
+          });
+        })
+      );
+    });
+
+    // 等待字体加载完成
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+
+    // 额外等待确保渲染完成（这是生成 PDF 之前的最后一步）
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
     // 清理文件名中的非法字符
     const sanitizeFilename = (str) => {
