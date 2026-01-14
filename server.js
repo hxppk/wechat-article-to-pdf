@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const puppeteer = require('puppeteer');
+const cheerio = require('cheerio');
 const fs = require('fs');
 const path = require('path');
 
@@ -60,6 +61,17 @@ app.post('/api/convert', async (req, res) => {
 
     const htmlContent = response.data;
     console.log('成功获取 HTML 内容，长度:', htmlContent.length);
+
+    // 使用 cheerio 解析 HTML 获取文章标题和公众号名称
+    const $ = cheerio.load(htmlContent);
+    const articleTitle = $('meta[property="og:title"]').attr('content')?.trim()
+      || $('.rich_media_title').text().trim()
+      || '微信文章';
+    const accountName = $('meta[property="og:site_name"]').attr('content')?.trim()
+      || $('#js_name').text().trim()
+      || '公众号';
+    console.log('文章标题:', articleTitle);
+    console.log('公众号名称:', accountName);
 
     // Step 2: 使用 Puppeteer 将 HTML 转换为 PDF
     console.log('正在启动浏览器...');
@@ -141,9 +153,11 @@ app.post('/api/convert', async (req, res) => {
     // 额外等待确保字体渲染完成（字体文件 16MB，需要更多时间）
     await new Promise(resolve => setTimeout(resolve, 5000));
 
-    // 生成唯一的文件名
-    const timestamp = Date.now();
-    const filename = `wechat_article_${timestamp}.pdf`;
+    // 生成文件名：文章标题_公众号名称.pdf
+    const safeFilename = str => str.replace(/[\/\\?%*:|"<>]/g, '').slice(0, 40);
+    const titlePart = safeFilename(articleTitle) || 'wechat_article';
+    const accountPart = safeFilename(accountName);
+    const filename = accountPart ? `${titlePart}_${accountPart}.pdf` : `${titlePart}_${Date.now()}.pdf`;
     const filepath = path.join(downloadsDir, filename);
 
     console.log('正在生成 PDF...');
